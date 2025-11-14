@@ -16,12 +16,17 @@
     <pre id="log"></pre>
 
     <script>
-      const socket = io("https://nonbankable-bethel-unmicrobic.ngrok-free.dev"); // TODO: replace with your real public URL
+      const socket = io("http://localhost:3000");
+      window.socket = socket;
       const log = document.getElementById("log");
 
       socket.on("receive_message", (msg) => {
         log.textContent += `\n${msg.senderId ?? msg.author_id ?? "unknown"}: ${msg.content ?? msg.body ?? ""}`;
       });
+
+      socket.on("connect_error", (err) => console.error("connect_error", err.message));
+      socket.on("disconnect", (reason) => console.log("disconnect", reason));
+      window.socket.on("connect", () => console.log("connected", window.socket.id));
 
       function sendMessage() {
         const sender = document.getElementById("sender").value.trim();
