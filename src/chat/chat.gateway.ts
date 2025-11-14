@@ -11,7 +11,7 @@ import { ChatService } from './chat.service';
 @WebSocketGateway({ cors: true })
 export class ChatGateway {
     @WebSocketServer()
-    server: Server;   
+    server!: Server;   
 
     constructor(private chatService: ChatService) {}
 

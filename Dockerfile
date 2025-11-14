@@ -3,7 +3,8 @@ WORKDIR /app
 
 # Install dependencies first (better layer caching)
 COPY package*.json ./
-RUN npm ci
+# Using npm install to avoid lockfile mismatch during demo builds
+RUN npm install
 
 # Generate Prisma client
 COPY prisma ./prisma
