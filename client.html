@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Zentrais Chat Demo</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h3>Zentrais Chat Demo</h3>
+
+    <input id="sender" placeholder="Sender ID" /><br />
+    <input id="receiver" placeholder="Receiver ID" /><br />
+    <input id="content" placeholder="Message" /><br />
+    <button type="button" onclick="sendMessage()">Send</button>
+
+    <pre id="log"></pre>
+
+    <script>
+      const socket = io("https://nonbankable-bethel-unmicrobic.ngrok-free.dev"); // TODO: replace with your real public URL
+      const log = document.getElementById("log");
+
+      socket.on("receive_message", (msg) => {
+        log.textContent += `\n${msg.senderId ?? msg.author_id ?? "unknown"}: ${msg.content ?? msg.body ?? ""}`;
+      });
+
+      function sendMessage() {
+        const sender = document.getElementById("sender").value.trim();
+        const receiver = document.getElementById("receiver").value.trim();
+        const content = document.getElementById("content").value.trim();
+
+        if (!sender || !receiver || !content) {
+          return;
+        }
+
+        socket.emit("send_message", {
+          author_id: sender,
+          receiver_id: receiver,
+          body: content,
+        });
+      }
+    </script>
+  </body>
+</html>
