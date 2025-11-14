@@ -15,6 +15,12 @@ enum MessageKind {
     MODERATION
 }
 
+// User Model
+// Following changes are made based on the data team's data schema:
+// user_id -> id
+// createdAT -> created_at
+// Every other fields beside id, username, password, messages, created_at are added.
+
 model User {
     id              String    @id @default(cuid())
     org_default_id  String    @unique
@@ -36,6 +42,7 @@ model User {
     @@map("users")
 }
 
+// User_PII Model is added based on the data team's data schema.
 model User_PII {
     user_id     String  @id
     email       String  @unique
@@ -46,6 +53,7 @@ model User_PII {
 
     @@map("user_pii")
 }
+
 
 model Message {
     id                String       @id @default(cuid())
