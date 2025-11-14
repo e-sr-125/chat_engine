@@ -1,0 +1,71 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url = env("DATABASE_URL")
+}
+
+// Enum for message types
+enum MessageKind {
+    USER
+    AI
+    SYSTEM
+    MODERATION
+}
+
+model User {
+    id              String    @id @default(cuid())
+    org_default_id  String    @unique
+    username        String    @unique
+    email           String    @unique
+    email_hash      Bytes     @unique
+    email_verified  Boolean   @default(false)
+    display_name    String?
+    avatar_url      String?
+    is_active       Boolean   @default(true)
+    password        String
+    deleted_at      DateTime?
+    created_at      DateTime  @default(now())
+    updated_at      DateTime?
+
+    // Relations
+    messages        Message[]
+
+    @@map("users")
+}
+
+model User_PII {
+    user_id     String  @id
+    email       String  @unique
+    phone       String?
+    legal_name  String?
+    address     String?
+    encrypted   Bytes
+
+    @@map("user_pii")
+}
+
+model Message {
+    id                String       @id @default(cuid())
+    topic_id          String?
+    org_id            String?
+    author_id         String
+    receiver_id       String
+    stance_id         String?
+    parent_message_id String?
+    kind              MessageKind  @default(USER)
+    body              String
+    rich_content      Json?
+    edited_at         DateTime?
+    deleted_at        DateTime?
+    created_at        DateTime     @default(now())
+
+    // Relations
+    author           User      @relation(fields: [author_id], references: [id])
+    parent_message   Message?  @relation("MessageReplies", fields: [parent_message_id], references: [id])
+    replies          Message[] @relation("MessageReplies")
+
+    @@map("messages")
+}
