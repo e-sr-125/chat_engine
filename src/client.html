@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Zentrais Chat Demo</title>
+  </head>
+  <body>
+    <h3>Zentrais Chat Demo</h3>
+
+    <input id="sender" placeholder="Sender ID" /><br />
+    <button onclick="registerUser()">Register</button><br /><br />
+
+    <input id="receiver" placeholder="Receiver ID" /><br />
+    <input id="content" placeholder="Message" /><br />
+    <button onclick="send()">Send</button>
+    
+
+    <pre id="log"></pre>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      // Connect to your WebSocket server (replace with your ngrok/public URL)
+    
+      const socket = io("https://venational-unconfutative-jann.ngrok-free.dev", {
+             transports: ["websocket"],
+            });
+
+
+      const log = document.getElementById("log");
+      let registeredUser = null;
+
+
+      socket.on("connect", () => {
+          log.textContent += "\n✅ Connected to server!";
+        });
+        socket.on("connect_error", (err) => {
+          log.textContent += `\n❌ Connection error: ${err.message}`;
+        });
+      socket.on("registered_error", (msg) => {
+          log.textContent += `\n⚠️ ${msg}`;
+        });
+      // Listen for incoming messages
+      socket.on("receive_message", (msg) => {
+        log.textContent += `\n${msg.senderId}: ${msg.content}`;
+      });
+
+      function registerUser() {
+        const sender = document.getElementById("sender").value.trim();
+        if (!sender) {
+          log.textContent += "\n⚠️ Enter sender ID first!";
+          return;
+        }
+
+        socket.emit("register", { userId: sender });
+
+        socket.once("registered", (msg) => {
+            registeredUser = sender;
+            log.textContent += `\n🟩 ${msg}`;
+        });
+        //registeredUser = sender;
+        log.textContent += `\n🟩 Registered as user ${sender}`;
+      }
+
+      // Send message to server
+      function send() {
+        if(!registeredUser){
+            log.textContent += "\n⚠️ Enter sender ID first";
+            return;
+        }
+
+        
+        const receiver = document.getElementById("receiver").value.trim();
+        const content = document.getElementById("content").value.trim();
+
+        
+        if (!receiver || !content) {
+          log.textContent += "\n⚠️ Enter receiver ID and message!";
+          return;
+        }
+        //Then send message
+        socket.emit("send_message", {
+          senderId: registeredUser,
+          receiverId: receiver,
+          content,
+        });
+
+        log.textContent += `\nYou (${registeredUser}): ${content}`;
+      }
+    </script>
+    
+
+  </body>
+</html>
