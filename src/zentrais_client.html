@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Zentrais Chat Demo</title>
+  </head>
+  <body>
+    <h3>Zentrais Chat Demo</h3>
+
+    <label>
+      API Base URL
+      <input id="apiBase" placeholder="http://localhost:3000" style="width:420px"/>
+    </label>
+    <br /><br />
+
+    <label>Username <input id="username" placeholder="alice"/></label><br />
+    <label>Password <input id="password" type="password" placeholder="••••••"/></label><br />
+
+    <button onclick="registerUser()">Register & Get Token</button>
+    <button onclick="loginUser()">Login & Get Token</button>
+    <label style="margin-left:12px; font-size:0.9rem">
+      <input id="autoConnect" type="checkbox" checked /> Connect after token
+    </label>
+    <br /><br />
+
+    <input id="token" placeholder="JWT token" style="width:420px"/><br />
+    <button onclick="connectSocket()">Connect</button><br /><br />
+
+    <input id="receiver" placeholder="Receiver Username"/><br />
+    <input id="content" placeholder="Message"/><br />
+    <button onclick="send()">Send Text</button><br /><br />
+
+    <hr />
+    <h4>Send Media</h4>
+    <input type="file" id="mediaFile" accept="image/*,audio/*"/><br />
+    <button onclick="sendMedia()">Upload & Send Media</button>
+    <br /><br />
+
+    <pre id="log"></pre>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      let socket;
+      let isConnected = false;
+      let registeredUser = null;
+      const log = document.getElementById("log");
+      const tokenInput = document.getElementById("token");
+      const apiBaseInput = document.getElementById("apiBase");
+
+      // Load saved token and base URL
+      const savedToken = localStorage.getItem("chat-demo-token");
+      const savedBase = localStorage.getItem("chat-demo-api-base");
+      if (savedToken) tokenInput.value = savedToken;
+      if (savedBase) apiBaseInput.value = savedBase;
+      else apiBaseInput.value = "http://localhost:3000";
+
+      function logMessage(msg) {
+        log.textContent += `\n${msg}`;
+      }
+
+      function logMedia(prefix, html) {
+        const div = document.createElement("div");
+        div.innerHTML = `${prefix} ${html}`;
+        log.appendChild(div);
+      }
+
+      function getApiBase() {
+        const raw = apiBaseInput.value.trim();
+        const normalized = raw.endsWith("/") ? raw.slice(0,-1) : raw;
+        localStorage.setItem("chat-demo-api-base", normalized);
+        return normalized;
+      }
+
+      // Register or login
+      async function registerUser() { await issueToken("register"); }
+      async function loginUser() { await issueToken("login"); }
+
+      async function issueToken(mode) {
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        if (!username || !password) { logMessage("⚠️ Enter username & password"); return; }
+
+        try {
+          const base = getApiBase();
+          logMessage(`⏳ ${mode}...`);
+
+          const res = await fetch(`${base}/auth/${mode}`, {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({username,password})
+          });
+
+          const payload = await res.json().catch(()=>({}));
+          if (!res.ok) throw new Error(payload.message||res.statusText);
+          if (!payload.token) throw new Error("Token missing in response");
+
+          tokenInput.value = payload.token;
+          localStorage.setItem("chat-demo-token", payload.token);
+          logMessage(`🟢 Token issued for ${username}`);
+
+          if (document.getElementById("autoConnect").checked) connectSocket();
+        } catch(err) {
+          logMessage(`❌ ${mode} failed: ${err.message}`);
+        }
+      }
+
+      // Connect WebSocket using token
+      function connectSocket() {
+        const token = tokenInput.value.trim();
+        if (!token) { logMessage("⚠️ Enter JWT token!"); return; }
+
+        localStorage.setItem("chat-demo-token", token);
+        if (socket) socket.disconnect();
+
+        socket = io(getApiBase(), {
+          transports:["websocket"],
+          auth:{ token }
+        });
+
+        // Decode userId from token for testing
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          registeredUser = payload.userId || payload.username || "unknown";
+          logMessage(`🟢 Using token, signed in as: ${registeredUser}`);
+        } catch(e) {
+          logMessage("⚠️ Failed to parse token payload");
+        }
+
+        wireSocketEvents();
+      }
+
+      function wireSocketEvents() {
+        socket.on("connect", ()=>{ isConnected=true; logMessage("✅ Connected to server!"); });
+        socket.on("disconnect", ()=>{ isConnected=false; logMessage("⚠️ Disconnected"); });
+        socket.on("connect_error", (err)=>{ isConnected=false; logMessage(`❌ Connection error: ${err.message}`); });
+        socket.on("auth_error", (msg)=>{ logMessage(`❌ Auth error: ${msg}`); });
+
+        socket.on("receive_message", (msg)=>{
+          if(msg.type==="IMAGE") logMedia(`${msg.senderId}:`, `<img src="${msg.mediaUrl}" width="200"/>`);
+          else if(msg.type==="AUDIO") logMedia(`${msg.senderId}:`, `<audio controls src="${msg.mediaUrl}"></audio>`);
+          else logMessage(`${msg.senderId}: ${msg.content}`);
+        });
+      }
+
+      // Send text message
+      function send() {
+        if(!socket||!isConnected) { logMessage("⚠️ Connect with token first!"); return; }
+        if(!registeredUser) { logMessage("⚠️ Using token for user"); }
+
+        const receiver = document.getElementById("receiver").value.trim();
+        const content = document.getElementById("content").value.trim();
+        if(!receiver||!content){ logMessage("⚠️ Enter receiver and message!"); return; }
+
+        socket.emit("send_message",{ senderId: registeredUser, receiverUsername: receiver, content,type:'TEXT' });
+        //logMessage(`You (${registeredUser}): ${content}`);
+      }
+
+      // Send media (image/audio)
+      async function sendMedia() {
+        if(!socket || !isConnected){ logMessage("⚠️ Connect with JWT first!"); return; }
+        if(!registeredUser){ logMessage("⚠️ Using token for user..."); }
+
+        const receiver = document.getElementById("receiver").value.trim();
+        const fileInput = document.getElementById("mediaFile");
+        const file = fileInput.files[0];
+        if(!receiver){ logMessage("⚠️ Enter receiver username!"); return; }
+        if(!file){ logMessage("⚠️ Select an image file!"); return; }
+
+        try {
+          logMessage(`⏳ Uploading ${file.name}...`);
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("receiverId", receiver);
+          formData.append("type", "IMAGE");
+
+          const uploadRes = await fetch(`${getApiBase()}/upload/media`, {
+            method:"POST",
+            headers:{ Authorization:`Bearer ${tokenInput.value.trim()}` },
+            body: formData
+          });
+
+          const uploadData = await uploadRes.json().catch(()=>({}));
+          if(!uploadRes.ok) throw new Error(uploadData.message || "Upload failed");
+
+          const mediaKey = uploadData.mediaKey;
+          socket.emit("send_message",{ senderId: registeredUser, receiverUsername: receiver, mediaUrl: mediaKey, type:'IMAGE' });
+          logMessage(`✅ Sent media: ${mediaUrl}`);
+
+          //logMedia(`You (${registeredUser}):`, `<img src="${mediaUrl}" width="200"/>`);
+          fileInput.value="";
+        } catch(err){
+        logMessage(`❌ Media send failed: ${err.message}`);
+  }
+}
+
+    </script>
+  </body>
+</html>

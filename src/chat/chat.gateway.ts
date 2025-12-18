@@ -10,12 +10,13 @@ import {
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { JwtService } from '@nestjs/jwt';  
+import { UploadService } from '../upload/upload.service';
 
-@WebSocketGateway({ cors: { origin: ['http://localhost:3000','*'] , methods: ['GET','POST'],}, transports: ['websocket'],})
+@WebSocketGateway({ cors: { origin:'*', methods: ['GET','POST'],}, transports: ['websocket'],})
 export class ChatGateway implements OnGatewayConnection{
     @WebSocketServer()
     server: Server;
-    constructor(private chatService: ChatService, private jwt : JwtService ,) {}
+    constructor(private chatService: ChatService, private jwt : JwtService ,private uploadService: UploadService) {}
 
     // Authenticate and join a private room
     async handleConnection(socket: Socket) {
@@ -39,19 +40,28 @@ export class ChatGateway implements OnGatewayConnection{
     
     @SubscribeMessage('send_message')
     async handleMessage (
-        @MessageBody () data : { receiverId : string ; content : string } ,
+        @MessageBody () data : { receiverUsername : string ; content : string ;mediaUrl : string ; type: 'TEXT' | 'IMAGE' | 'AUDIO';} ,
         @ConnectedSocket () socket : Socket ,
     ) {
         const senderId = socket.data.userId ;
+        const receiverId=await this.chatService.getUserId(data.receiverUsername)
         const message = await this.chatService.saveMessage ({
-                senderId ,
-                receiverId : data.receiverId ,
-                content : data.content ,
+                senderId,
+                receiverId,
+                type: data.type,
+                content: data.type == 'TEXT' ? data.content : null,
+                mediaUrl: data.type !='TEXT'? data.mediaUrl : null
         }) ;
+        
+        if (message.mediaUrl && message.type !== 'TEXT') {
+          message.mediaUrl = await this.uploadService.getPresignedUrl(message.mediaUrl);  
+        }
+
        // Emit to sender + receiver only
        this.server.to(message.senderId).emit ( 'receive_message', message ) ;
        this.server.to(message.receiverId).emit ('receive_message', message ) ;
     }
+  
 }
 
 

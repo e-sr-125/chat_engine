@@ -25,8 +25,8 @@ export class AuthController {
     return { token };
   }
 
-  @Post('signup')
-  async signup(@Body() body: { username: string; password: string }) {
+  @Post('register')
+  async register(@Body() body: { username: string; password: string }) {
     // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
         where: { username: body.username },
